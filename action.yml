@@ -39,14 +39,17 @@ inputs:
     description: 'Optional report export in JSON format'
     required: false
   appid:
+    description: 'GitHub App ID for App-based authentication (optional alternative to token)'
     required: false
   privatekey:
+    description: 'GitHub App private key (PEM format) for App-based authentication'
     required: false
   installationid:
+    description: 'GitHub App installation ID for App-based authentication'
     required: false
 
 runs:
-  using: 'node16'
+  using: 'node22'
   main: 'dist/index.js'
 
 branding:
