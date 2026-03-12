@@ -16,19 +16,20 @@
   ],
   "repository": "github:nicklegan/github-org-code-frequency-action",
   "engines": {
-    "node": ">=16",
+    "node": ">=22",
     "npm": ">=7"
   },
   "license": "MIT",
+  "type": "module",
   "main": "index.js",
   "scripts": {
     "build": "npx @vercel/ncc build index.js --out dist --license licenses.txt --quiet --minify"
   },
   "dependencies": {
-    "@actions/core": "^1.9.1",
-    "@actions/github": "^5.0.3",
-    "@octokit/auth-app": "^4.0.5",
-    "csv": "^6.2.0",
-    "natural-orderby": "^2.0.3"
+    "@actions/core": "^3.0.0",
+    "@actions/github": "^9.0.0",
+    "@octokit/auth-app": "^8.2.0",
+    "csv": "^6.4.1",
+    "natural-orderby": "^5.0.0"
   }
 }
