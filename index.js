@@ -1,10 +1,12 @@
-const core = require('@actions/core')
-const github = require('@actions/github')
-const { stringify } = require('csv-stringify/sync')
-const { orderBy } = require('natural-orderby')
-const eventPayload = require(process.env.GITHUB_EVENT_PATH)
-const { GitHub } = require('@actions/github/lib/utils')
-const { createAppAuth } = require('@octokit/auth-app')
+import core from '@actions/core'
+import * as github from '@actions/github'
+import fs from 'fs'
+import { stringify } from 'csv-stringify/sync'
+import { orderBy } from 'natural-orderby'
+import { GitHub } from '@actions/github/lib/utils'
+import { createAppAuth } from '@octokit/auth-app'
+const eventPayload = JSON.parse(fs.readFileSync(process.env.GITHUB_EVENT_PATH, 'utf8'))
+
 const { owner, repo } = github.context.repo
 
 const appId = core.getInput('appid', { required: false })
@@ -12,7 +14,11 @@ const privateKey = core.getInput('privatekey', { required: false })
 const installationId = core.getInput('installationid', { required: false })
 
 const token = core.getInput('token', { required: true })
-const org = core.getInput('org', { required: false }) || eventPayload.organization.login
+const org = core.getInput('org', { required: false }) || eventPayload.organization?.login
+if (!org) {
+  core.setFailed('Could not determine organization. Provide the "org" input or run this action in an organization context.')
+  process.exit(1)
+}
 const weeks = core.getInput('weeks', { required: false }) || '4'
 const sortColumn = core.getInput('sort', { required: false }) || 'additions'
 const sortOrder = core.getInput('sort-order', { required: false }) || 'desc'
@@ -39,20 +45,18 @@ if (appId && privateKey && installationId) {
 }
 
 // Orchestrator
-;(async () => {
-  try {
-    let repoArray = []
-    let sumArray = []
-    await getRepos(repoArray)
-    await freqStats(repoArray, sumArray)
-    await sortpushTotals(sumArray)
-    if (jsonExport === 'true') {
+try {
+  const repoArray = []
+  const sumArray = []
+  await getRepos(repoArray)
+  await freqStats(repoArray, sumArray)
+  await sortpushTotals(sumArray)
+  if (jsonExport === 'true') {
     await json(sumArray)
-    }
-  } catch (error) {
-    core.setFailed(error.message)
   }
-})()
+} catch (error) {
+  core.setFailed(error.message)
+}
 
 // Retrieve all repos for org
 async function getRepos(repoArray) {
@@ -116,11 +120,15 @@ async function getRepos(repoArray) {
 async function freqStats(repoArray, sumArray) {
   try {
     for (const repo of repoArray) {
+      let response
+      let retries = 0
+      const maxRetries = 5
       do {
         response = await octokit.rest.repos.getCodeFrequencyStats({
           owner: org,
           repo: repo.name
         })
+        retries++
 
         let weeksTotal
         let weeksInterval = []
@@ -137,14 +145,14 @@ async function freqStats(repoArray, sumArray) {
 
         if (weeksTotal !== undefined) {
           if (weeksTotal.length > 0) {
-            if (re.test(fromdate, todate) !== true) {
+            if (re.test(fromdate) !== true || re.test(todate) !== true) {
               weeksInterval = weeksTotal.slice(-weeks)
               columnDate = `<${weeks} weeks`
               fileDate = `${weeks}-weeks`
               logDate = `last ${weeks} weeks`
             } else {
-              to = new Date(todate).getTime() / 1000
-              from = new Date(fromdate).getTime() / 1000
+              const to = new Date(todate).getTime() / 1000
+              const from = new Date(fromdate).getTime() / 1000
               for (const element of weeksTotal) {
                 if (element[0] >= from && element[0] <= to) {
                   weeksInterval.push(element)
@@ -155,8 +163,8 @@ async function freqStats(repoArray, sumArray) {
               }
             }
 
-            intervalTotal = weeksInterval.reduce((r, a) => a.map((b, i) => (r[i] || 0) + b), []).slice(1)
-            alltimeTotal = weeksTotal.reduce((r, a) => a.map((b, i) => (r[i] || 0) + b), []).slice(1)
+            const intervalTotal = weeksInterval.reduce((r, a) => a.map((b, i) => (r[i] || 0) + b), []).slice(1)
+            const alltimeTotal = weeksTotal.reduce((r, a) => a.map((b, i) => (r[i] || 0) + b), []).slice(1)
 
             const additions = intervalTotal[0]
             const deletions = Math.abs(intervalTotal[1])
@@ -178,7 +186,7 @@ async function freqStats(repoArray, sumArray) {
             console.log(repoName)
           }
         }
-      } while (response.status === 202)
+      } while (response.status === 202 && retries < maxRetries)
     }
   } catch (error) {
     core.setFailed(error.message)
